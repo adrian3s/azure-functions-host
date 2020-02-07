@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Azure.WebJobs.Script.Description;
 using Microsoft.Azure.WebJobs.Script.Diagnostics;
 using Microsoft.Azure.WebJobs.Script.Eventing;
+using Microsoft.Azure.WebJobs.Script.Workers.ProcessManagement;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -159,6 +160,16 @@ namespace Microsoft.Azure.WebJobs.Script.Workers
                 }
             }
             _invokerErrors.Push(currentErrorEvent);
+        }
+
+        public Task<WorkerStats> GetWorkerStatsAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task PingAsync()
+        {
+            throw new NotImplementedException();
         }
 
         protected virtual void Dispose(bool disposing)

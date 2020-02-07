@@ -8,6 +8,7 @@ namespace Microsoft.Azure.WebJobs.Script
     public class HostHealthMonitorOptions
     {
         internal const float DefaultCounterThreshold = 0.80F;
+        internal const int DefaultMaxCpuThreshold = 85;
 
         public HostHealthMonitorOptions()
         {

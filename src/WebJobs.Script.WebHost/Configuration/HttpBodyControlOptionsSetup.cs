@@ -19,6 +19,13 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost.Configuration
         {
             options.AllowSynchronousIO = _environment.IsV2CompatibilityMode()
                 || FeatureFlags.IsEnabled(ScriptConstants.FeatureFlagAllowSynchronousIO, _environment);
+
+            // TEMP hack - for some reason my Java app is having problems
+            // with sync IO
+            if (_environment.IsOutOfProc())
+            {
+                options.AllowSynchronousIO = true;
+            }
         }
     }
 }

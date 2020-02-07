@@ -49,6 +49,7 @@ namespace Microsoft.Azure.WebJobs.Script
         public const string FunctionsRuntimeScaleMonitoringEnabled = "FUNCTIONS_RUNTIME_SCALE_MONITORING_ENABLED";
         public const string AzureWebsiteStartupContextCache = "WEBSITE_FUNCTIONS_STARTUPCONTEXT_CACHE";
         public const string AzureWebJobsFeatureFlags = "AzureWebJobsFeatureFlags";
+        public const string HttpScalePingLatencyThreshold = "HTTP_SCALE_PING_LATENCY_THRESHOLD";
 
         /// <summary>
         /// Environment variable dynamically set by the platform when it is safe to

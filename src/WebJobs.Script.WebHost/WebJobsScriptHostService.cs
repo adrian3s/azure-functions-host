@@ -52,7 +52,7 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost
         private int _applicationStopped;
 
         public WebJobsScriptHostService(IOptionsMonitor<ScriptApplicationHostOptions> applicationHostOptions, IScriptHostBuilder scriptHostBuilder, ILoggerFactory loggerFactory,
-            IServiceScopeFactory rootScopeFactory, IScriptWebHostEnvironment scriptWebHostEnvironment, IEnvironment environment,
+            IScriptWebHostEnvironment scriptWebHostEnvironment, IEnvironment environment,
             HostPerformanceManager hostPerformanceManager, IOptions<HostHealthMonitorOptions> healthMonitorOptions, IMetricsLogger metricsLogger, IApplicationLifetime applicationLifetime)
         {
             if (loggerFactory == null)
@@ -478,11 +478,11 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost
             }
         }
 
-        private void OnHostInitializing(object sender, EventArgs e)
+        private async void OnHostInitializing(object sender, EventArgs e)
         {
             // we check host health before starting to avoid starting
             // the host when connection or other issues exist
-            IsHostHealthy(throwWhenUnhealthy: true);
+            await IsHostHealthy(throwWhenUnhealthy: true);
         }
 
         /// <summary>
@@ -553,9 +553,9 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost
             }
         }
 
-        private void OnHostHealthCheckTimer(object state)
+        private async void OnHostHealthCheckTimer(object state)
         {
-            bool isHealthy = IsHostHealthy();
+            bool isHealthy = await IsHostHealthy();
             _healthCheckWindow.AddEvent(isHealthy);
 
             if (!isHealthy && State == ScriptHostState.Running)
@@ -569,7 +569,7 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost
             }
         }
 
-        internal bool IsHostHealthy(bool throwWhenUnhealthy = false)
+        internal async Task<bool> IsHostHealthy(bool throwWhenUnhealthy = false)
         {
             if (!ShouldMonitorHostHealth)
             {
@@ -577,7 +577,7 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost
             }
 
             var exceededCounters = new Collection<string>();
-            if (_performanceManager.IsUnderHighLoad(exceededCounters))
+            if (await _performanceManager.IsUnderHighLoad(exceededCounters))
             {
                 string formattedCounters = string.Join(", ", exceededCounters);
                 if (throwWhenUnhealthy)

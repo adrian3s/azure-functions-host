@@ -56,8 +56,8 @@ namespace Microsoft.Azure.WebJobs.Script.WebHost.DependencyInjection
                 .Expect<AzureMonitorDiagnosticLoggerProvider>()
                 .Expect<FunctionFileLoggerProvider>()
                 .Expect<HostFileLoggerProvider>()
-                .Expect<SystemLoggerProvider>()
-                .Expect<UserLogMetricsLoggerProvider>();
+                .Expect<SystemLoggerProvider>();
+                //.Expect<UserLogMetricsLoggerProvider>();
 
             return expected;
         }

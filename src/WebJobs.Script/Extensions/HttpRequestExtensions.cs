@@ -3,9 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
@@ -91,10 +93,21 @@ namespace Microsoft.Azure.WebJobs.Script.Extensions
 
         public static byte[] GetRequestBodyAsBytes(this HttpRequest request)
         {
-            var length = Convert.ToInt32(request.ContentLength);
-            var bytes = new byte[length];
-            request.Body.Read(bytes, 0, length);
-            request.Body.Position = 0;
+            request.EnableBuffering();
+
+            byte[] bytes;
+            using (var ms = new MemoryStream())
+            using (var reader = new StreamReader(ms))
+            {
+                request.Body.CopyTo(ms);
+                bytes = ms.ToArray();
+            }
+
+            if (request.Body.CanSeek)
+            {
+                request.Body.Seek(0, SeekOrigin.Begin);
+            }
+
             return bytes;
         }
 

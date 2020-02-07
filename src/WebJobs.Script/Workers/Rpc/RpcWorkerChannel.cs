@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
@@ -16,6 +17,7 @@ using Microsoft.Azure.WebJobs.Script.Eventing;
 using Microsoft.Azure.WebJobs.Script.Eventing.Rpc;
 using Microsoft.Azure.WebJobs.Script.Grpc.Messages;
 using Microsoft.Azure.WebJobs.Script.ManagedDependencies;
+using Microsoft.Azure.WebJobs.Script.Workers.ProcessManagement;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using static Microsoft.Azure.WebJobs.Script.Grpc.Messages.RpcLog.Types;
@@ -43,6 +45,7 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
         private IDictionary<string, Exception> _functionLoadErrors = new Dictionary<string, Exception>();
         private ConcurrentDictionary<string, ScriptInvocationContext> _executingInvocations = new ConcurrentDictionary<string, ScriptInvocationContext>();
         private IDictionary<string, BufferBlock<ScriptInvocationContext>> _functionInputBuffers = new ConcurrentDictionary<string, BufferBlock<ScriptInvocationContext>>();
+        private ConcurrentDictionary<string, TaskCompletionSource<bool>> _workerPingTask = new ConcurrentDictionary<string, TaskCompletionSource<bool>>();
         private IObservable<InboundEvent> _inboundWorkerEvents;
         private List<IDisposable> _inputLinks = new List<IDisposable>();
         private List<IDisposable> _eventSubscriptions = new List<IDisposable>();
@@ -101,6 +104,9 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
             _eventSubscriptions.Add(_inboundWorkerEvents.Where(msg => msg.MessageType == MsgType.InvocationResponse)
                 .Subscribe((msg) => InvokeResponse(msg.Message.InvocationResponse)));
 
+            _inboundWorkerEvents.Where(msg => msg.MessageType == MsgType.WorkerStatusResponse)
+               .Subscribe((msg) => ReceiveWorkerPingResponse(msg.Message.RequestId, msg.Message.WorkerStatusResponse));
+
             _startLatencyMetric = metricsLogger?.LatencyEvent(string.Format(MetricEventNames.WorkerInitializeLatency, workerConfig.Description.Language, attemptCount));
 
             _state = RpcWorkerChannelState.Default;
@@ -125,6 +131,16 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
             await _rpcWorkerProcess.StartProcessAsync();
             _state = RpcWorkerChannelState.Initializing;
             await _workerInitTask.Task;
+        }
+
+        public Task<ProcessStats> GetWorkerStatsAsync()
+        {
+            var stats = _rpcWorkerProcess.GetStats();
+
+            string formattedLoadHistory = string.Join(",", stats.CpuLoadHistory);
+            _workerChannelLogger.LogDebug($"[HostMonitor] Worker stats: EffectiveCores: {_environment.GetEffectiveCoresCount()}, ProcessId={_rpcWorkerProcess.Id}, ExecutingFunctions: {_executingInvocations.Count}, CpuLoadHistory=({formattedLoadHistory}), AvgLoad: {stats.CpuLoadHistory.Average()}, MaxLoad: {stats.CpuLoadHistory.Max()}");
+
+            return Task.FromResult(stats);
         }
 
         // send capabilities to worker, wait for WorkerInitResponse
@@ -312,13 +328,13 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
             }
 
             // link the invocation inputs to the invoke call
-            var invokeBlock = new ActionBlock<ScriptInvocationContext>(ctx => SendInvocationRequest(ctx));
+            var invokeBlock = new ActionBlock<ScriptInvocationContext>(async ctx => await SendInvocationRequest(ctx));
             // associate the invocation input buffer with the function
             var disposableLink = _functionInputBuffers[loadResponse.FunctionId].LinkTo(invokeBlock);
             _inputLinks.Add(disposableLink);
         }
 
-        internal void SendInvocationRequest(ScriptInvocationContext context)
+        internal async Task SendInvocationRequest(ScriptInvocationContext context)
         {
             try
             {
@@ -335,7 +351,7 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
                         context.ResultSource.SetCanceled();
                         return;
                     }
-                    InvocationRequest invocationRequest = context.ToRpcInvocationRequest(IsTriggerMetadataPopulatedByWorker(), _workerChannelLogger, _workerCapabilities);
+                    InvocationRequest invocationRequest = await context.ToRpcInvocationRequest(IsTriggerMetadataPopulatedByWorker(), _workerChannelLogger, _workerCapabilities);
                     _executingInvocations.TryAdd(invocationRequest.InvocationId, context);
 
                     SendStreamingMessage(new StreamingMessage
@@ -352,7 +368,8 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
 
         internal void InvokeResponse(InvocationResponse invokeResponse)
         {
-            _workerChannelLogger.LogDebug("InvocationResponse received for invocation id: {Id}", invokeResponse.InvocationId);
+            // oop logs
+            //_workerChannelLogger.LogDebug("InvocationResponse received for invocation id: {Id}", invokeResponse.InvocationId);
             if (_executingInvocations.TryRemove(invokeResponse.InvocationId, out ScriptInvocationContext context)
                 && invokeResponse.Result.IsSuccess(context.ResultSource))
             {
@@ -462,6 +479,33 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
         private void SendStreamingMessage(StreamingMessage msg)
         {
             _eventManager.Publish(new OutboundEvent(_workerId, msg));
+        }
+
+        public async Task PingAsync()
+        {
+            var message = new StreamingMessage
+            {
+                RequestId = Guid.NewGuid().ToString(),
+                WorkerStatusRequest = new WorkerStatusRequest()
+            };
+
+            var sw = Stopwatch.StartNew();
+            var tcs = new TaskCompletionSource<bool>();
+            if (_workerPingTask.TryAdd(message.RequestId, tcs))
+            {
+                SendStreamingMessage(message);
+                await tcs.Task;
+                sw.Stop();
+                _workerChannelLogger.LogInformation($"Worker ping took {sw.ElapsedMilliseconds}ms");
+            }
+        }
+
+        internal void ReceiveWorkerPingResponse(string requestId, WorkerStatusResponse responseEvent)
+        {
+            if (_workerPingTask.TryRemove(requestId, out var pingTask))
+            {
+                pingTask.SetResult(true);
+            }
         }
 
         protected virtual void Dispose(bool disposing)

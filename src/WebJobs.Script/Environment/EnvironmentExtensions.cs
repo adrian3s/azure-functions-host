@@ -5,6 +5,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using Microsoft.Azure.WebJobs.Script.Workers.Rpc;
 using static Microsoft.Azure.WebJobs.Script.EnvironmentSettingNames;
 
 namespace Microsoft.Azure.WebJobs.Script
@@ -13,6 +14,12 @@ namespace Microsoft.Azure.WebJobs.Script
     {
         // For testing
         internal static string BaseDirectory { get; set; }
+
+        public static bool IsOutOfProc(this IEnvironment environment)
+        {
+            var runtime = environment.GetEnvironmentVariable(RpcWorkerConstants.FunctionWorkerRuntimeSettingName);
+            return string.IsNullOrEmpty(runtime) || !string.Equals(runtime, RpcWorkerConstants.DotNetLanguageWorkerName, StringComparison.OrdinalIgnoreCase);
+        }
 
         public static string GetEnvironmentVariableOrDefault(this IEnvironment environment, string name, string defaultValue)
         {
@@ -165,6 +172,13 @@ namespace Microsoft.Azure.WebJobs.Script
         {
             string value = environment.GetEnvironmentVariable(AzureWebsiteSku);
             return string.Equals(value, ScriptConstants.DynamicSku, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static int GetEffectiveCoresCount(this IEnvironment environment)
+        {
+            // The dynamic plan has some limits that mean that a given instance is using effectively a single core, so we should not use Environment.Processor count in this case.
+            var effectiveCores = environment.IsWindowsConsumption() ? 1 : Environment.ProcessorCount;
+            return effectiveCores;
         }
 
         /// <summary>

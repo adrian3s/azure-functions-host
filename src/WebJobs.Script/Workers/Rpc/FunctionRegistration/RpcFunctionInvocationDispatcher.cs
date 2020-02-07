@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading;
@@ -14,6 +15,7 @@ using Microsoft.Azure.WebJobs.Script.Description;
 using Microsoft.Azure.WebJobs.Script.Diagnostics;
 using Microsoft.Azure.WebJobs.Script.Eventing;
 using Microsoft.Azure.WebJobs.Script.ManagedDependencies;
+using Microsoft.Azure.WebJobs.Script.Workers.ProcessManagement;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -215,6 +217,36 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
             }
         }
 
+        public async Task PingAsync()
+        {
+            // TODO: ping just one channel, or all?
+            var workerChannels = await GetInitializedWorkerChannelsAsync();
+            var channel = _functionDispatcherLoadBalancer.GetLanguageWorkerChannel(workerChannels, _maxProcessCount);
+            var sw = Stopwatch.StartNew();
+            await channel.PingAsync();
+            sw.Stop();
+
+            _logger.LogDebug($"[HostMonitor] Worker ping: ID={channel.Id}, Latency={sw.ElapsedMilliseconds}ms");
+        }
+
+        public async Task<WorkerStats> GetWorkerStatsAsync()
+        {
+            var workerChannels = await GetInitializedWorkerChannelsAsync();
+            _logger.LogDebug($"[HostMonitor] Checking worker health (Count={workerChannels.Count()})");
+
+            var stats = new Dictionary<string, ProcessStats>();
+            foreach (var channel in workerChannels)
+            {
+                var currStats = await channel.GetWorkerStatsAsync();
+                stats.Add(channel.Id, currStats);
+            }
+
+            return new WorkerStats
+            {
+                Stats = stats
+            };
+        }
+
         public async Task ShutdownAsync()
         {
             _logger.LogDebug($"Waiting for {nameof(RpcFunctionInvocationDispatcher)} to shutdown");
@@ -240,7 +272,8 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
                 var rpcWorkerChannel = _functionDispatcherLoadBalancer.GetLanguageWorkerChannel(workerChannels, _maxProcessCount);
                 if (rpcWorkerChannel.FunctionInputBuffers.TryGetValue(invocationContext.FunctionMetadata.FunctionId, out BufferBlock<ScriptInvocationContext> bufferBlock))
                 {
-                    _logger.LogDebug("Posting invocation id:{InvocationId} on workerId:{workerChannelId}", invocationContext.ExecutionContext.InvocationId, rpcWorkerChannel.Id);
+                    // oop logs
+                    //_logger.LogDebug("Posting invocation id:{InvocationId} on workerId:{workerChannelId}", invocationContext.ExecutionContext.InvocationId, rpcWorkerChannel.Id);
                     rpcWorkerChannel.FunctionInputBuffers[invocationContext.FunctionMetadata.FunctionId].Post(invocationContext);
                 }
                 else
@@ -256,25 +289,25 @@ namespace Microsoft.Azure.WebJobs.Script.Workers.Rpc
 
         internal async Task<IEnumerable<IRpcWorkerChannel>> GetInitializedWorkerChannelsAsync()
         {
-            Dictionary<string, TaskCompletionSource<IRpcWorkerChannel>> webhostChannelDictionary = _webHostLanguageWorkerChannelManager.GetChannels(_workerRuntime);
+            var webhostChannelDictionary = _webHostLanguageWorkerChannelManager.GetChannels(_workerRuntime);
             List<IRpcWorkerChannel> webhostChannels = null;
             if (webhostChannelDictionary != null)
             {
                 webhostChannels = new List<IRpcWorkerChannel>();
-                foreach (string workerId in webhostChannelDictionary.Keys)
+                foreach (var pair in webhostChannelDictionary)
                 {
-                    if (webhostChannelDictionary.TryGetValue(workerId, out TaskCompletionSource<IRpcWorkerChannel> initializedLanguageWorkerChannelTask))
-                    {
-                        webhostChannels.Add(await initializedLanguageWorkerChannelTask.Task);
-                    }
+                    var workerChannel = await pair.Value.Task;
+                    webhostChannels.Add(workerChannel);
                 }
             }
+
             IEnumerable<IRpcWorkerChannel> workerChannels = webhostChannels == null ? _jobHostLanguageWorkerChannelManager.GetChannels() : webhostChannels.Union(_jobHostLanguageWorkerChannelManager.GetChannels());
             IEnumerable<IRpcWorkerChannel> initializedWorkers = workerChannels.Where(ch => ch.State == RpcWorkerChannelState.Initialized);
             if (initializedWorkers.Count() > _maxProcessCount)
             {
                 throw new InvalidOperationException($"Number of initialized language workers exceeded:{initializedWorkers.Count()} exceeded maxProcessCount: {_maxProcessCount}");
             }
+
             return initializedWorkers;
         }
 

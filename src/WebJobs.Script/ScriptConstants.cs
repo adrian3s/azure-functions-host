@@ -83,10 +83,12 @@ namespace Microsoft.Azure.WebJobs.Script
         public const string ColdStartEventName = "ColdStart";
 
         public const string FunctionsUserAgent = "AzureFunctionsRuntime";
+        public const string HttpScaleUserAgent = "HttpScaleManager";
         public const string AntaresDefaultHostNameHeader = "WAS-DEFAULT-HOSTNAME";
         public const string AntaresARMRequestTrackingIdHeader = "x-ms-arm-request-tracking-id";
         public const string AntaresARMExtensionsRouteHeader = "X-MS-VIA-EXTENSIONS-ROUTE";
         public const string AntaresClientAuthorizationSourceHeader = "X-MS-CLIENT-AUTHORIZATION-SOURCE";
+        public const string HttpScalePingLatencyThresholdHeader = "X-FUNCTIONS-PING-LATENCY-THRESHOLD";
         public const string AntaresLogIdHeaderName = "X-ARR-LOG-ID";
         public const string AntaresScaleOutHeaderName = "X-FUNCTION-SCALEOUT";
         public const string AntaresColdStartHeaderName = "X-MS-COLDSTART";
