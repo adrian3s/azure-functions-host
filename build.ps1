@@ -261,6 +261,7 @@ dotnet build .\WebJobs.Script.sln -v q /p:BuildNumber="$buildNumber"
 
 $projects = 
   "WebJobs.Script",
+  "WebJobs.Script.Abstractions",
   "WebJobs.Script.WebHost",
   "WebJobs.Script.Grpc"
   
