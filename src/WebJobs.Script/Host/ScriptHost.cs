@@ -26,6 +26,7 @@ using Microsoft.Azure.WebJobs.Script.Diagnostics;
 using Microsoft.Azure.WebJobs.Script.Diagnostics.Extensions;
 using Microsoft.Azure.WebJobs.Script.Eventing;
 using Microsoft.Azure.WebJobs.Script.Extensibility;
+using Microsoft.Azure.WebJobs.Script.Extensions;
 using Microsoft.Azure.WebJobs.Script.Workers;
 using Microsoft.Azure.WebJobs.Script.Workers.Http;
 using Microsoft.Azure.WebJobs.Script.Workers.Rpc;
@@ -296,7 +297,7 @@ namespace Microsoft.Azure.WebJobs.Script
 
                 // Initialize worker function invocation dispatcher only for valid functions after creating function descriptors
                 // Codeless functions do not need a dispatcher, and need to be filtered
-                var functionMetadataListFiltered = Utility.FilterOutCodeless(functionMetadataList);
+                var functionMetadataListFiltered = functionMetadataList.Where(m => !m.IsCodeless());
                 await _functionDispatcher.InitializeAsync(Utility.GetValidFunctions(functionMetadataListFiltered, Functions), cancellationToken);
 
                 GenerateFunctions(directTypes);
