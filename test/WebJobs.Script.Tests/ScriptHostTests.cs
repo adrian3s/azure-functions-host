@@ -961,6 +961,51 @@ namespace Microsoft.Azure.WebJobs.Script.Tests
             Assert.False(Utility.IsSingleLanguage(functionsList, "node"));
         }
 
+        [Theory]
+        [InlineData("python")]
+        [InlineData("node")]
+        [InlineData("dotnet")]
+        [InlineData("java")]
+        public void IsSingleLanguage_Codeless_AndAnother_Always_Returns_True(string workerRuntime)
+        {
+            FunctionMetadata funcPython1 = new FunctionMetadata()
+            {
+                Name = "funcPython1",
+                Language = "python",
+            };
+            // Codeless qualifies as any language
+            FunctionMetadata funcCodeless = new FunctionMetadata()
+            {
+                Name = "funcCSharp1",
+                Language = "Codeless",
+            };
+            IEnumerable<FunctionMetadata> functionsList = new Collection<FunctionMetadata>()
+            {
+                funcPython1, funcCodeless
+            };
+            Assert.True(Utility.IsSingleLanguage(functionsList, workerRuntime));
+        }
+
+        [Theory]
+        [InlineData("python")]
+        [InlineData("node")]
+        [InlineData("dotnet")]
+        [InlineData("java")]
+        public void IsSingleLanguage_Just_Codeless_Always_Returns_True(string workerRuntime)
+        {
+            // Codeless qualifies as any language
+            FunctionMetadata funcCodeless = new FunctionMetadata()
+            {
+                Name = "funcCSharp1",
+                Language = "Codeless",
+            };
+            IEnumerable<FunctionMetadata> functionsList = new Collection<FunctionMetadata>()
+            {
+                funcCodeless
+            };
+            Assert.True(Utility.IsSingleLanguage(functionsList, workerRuntime));
+        }
+
         [Fact]
         public void IsSingleLanguage_Returns_False()
         {

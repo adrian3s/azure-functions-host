@@ -491,7 +491,7 @@ namespace Microsoft.Azure.WebJobs.Script
         private void AddFunctionDescriptors(IEnumerable<FunctionMetadata> functionMetadata)
         {
             // Add the proxy descriptor provider if needed
-            if (functionMetadata.Any(m => m?.IsProxy ?? false))
+            if (functionMetadata.Any(m => m.IsProxy))
             {
                 _descriptorProviders.Add(new ProxyFunctionDescriptorProvider(this, ScriptOptions, _bindingProviders, _loggerFactory));
             }
@@ -525,7 +525,7 @@ namespace Microsoft.Azure.WebJobs.Script
         /// </summary>
         private void AddCodelessDescriptor()
         {
-            if (_functionMetadataManager.GetFunctionMetadata().Any(m => string.Equals(m?.Language, DotNetScriptTypes.Codeless, StringComparison.OrdinalIgnoreCase)))
+            if (_functionMetadataManager.GetFunctionMetadata().Any(m => string.Equals(m.Language, DotNetScriptTypes.Codeless, StringComparison.OrdinalIgnoreCase)))
             {
                 _descriptorProviders.Add(new DotNetFunctionDescriptorProvider(this, ScriptOptions, _bindingProviders, _metricsLogger, _loggerFactory));
             }
